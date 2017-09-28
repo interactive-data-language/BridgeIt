@@ -660,6 +660,71 @@ function bridge_it::Run, routine, $
 end
 
 
+;+
+; :Description:
+;    Describe the procedure.
+;
+; :Params:
+;    varName: in, required, type=string
+;      Specify the name of the variable as it will appear in the child process.
+;    var: in, requried, type=any
+;      Specify the variable that will be sent to the child process. Any
+;      hashes, dictionaries, or structures will be converted to strings and
+;      parsed on the other side.
+;
+; :Keywords:
+;    LIST: in, optional, type=boolean, default=false
+;      If set, and if your object is a hash, orderedhash, or structure, then the
+;      rehydrated version of the variable will use lists instead of arrays where
+;      applicable.
+;
+; :Author: Zachary Norman - GitHub : znorman-harris
+;-
+pro bridge_it::SetVar, varName, var, LIST = list, POST_EXECUTE = post_execute
+  compile_opt idl2
+
+  ;init string for post processing
+  post = ''
+
+  ;check what kind of variable we have to process
+  ; TODO: figure out the best order below for optimal performance bc
+  ; there seems to be an issue with dictionaries going back and forth
+  case (1) of
+    isa(var, 'HASH'):begin
+      set = json_serialize(var)
+      if ~keyword_set(list) then begin
+        post = varName + ' = json_parse(' + varName + ', /TOARRAY)'
+      endif else begin
+        post = varName + ' = json_parse(' + varName + ')'
+      endelse
+    end
+    isa(var, 'DICTIONARY'):begin
+      set = json_serialize(var)
+      if ~keyword_set(list) then begin
+        post = varName + ' = json_parse(' + varName + ', /DICTIONARY, /TOARRAY)'
+      endif else begin
+        post = varName + ' = json_parse(' + varName + ', /DICTIONARY)'
+      endelse
+    end
+    isa(var, 'STRUCT'):begin
+      set = json_serialize(var)
+      if ~keyword_set(list) then begin
+        post = varName + ' = json_parse(' + varName + ', /STRUCT, /TOARRAY)'
+      endif else begin
+        post = varName + ' = json_parse(' + varName + ', /STRUCT)'
+      endelse
+    end
+    else:set = var
+  endcase
+
+  ;set the variables on each child process
+  foreach bridge, *self.bridges do begin
+    bridge.SetVar, varName, set
+    if keyword_set(post) then bridge.Execute, post
+    if keyword_set(post_execute) then bridge.Execute, strjoin(post_execute, ' & ')
+  endforeach
+end
+
 
 ;+
 ; :Description:
