@@ -238,6 +238,11 @@ Create a pull request once you have made desired changes. Please try to follow t
 ## License
 
 Licensed under MIT. See LICENSE.txt for additional details and information.
+<<<<<<< HEAD
 
 (c) 2017 Exelis Visual Information Solutions, Inc., a subsidiary of Harris Corporation.
 
+=======
+
+(c) 2017 Exelis Visual Information Solutions, Inc., a subsidiary of Harris Corporation.
+>>>>>>> master
