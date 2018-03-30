@@ -224,6 +224,11 @@ pro bridge_it_callback, status, error, oBridge, userdata
   ;disable callback
   oBridge.SetProperty, CALLBACK = ''
 
+  if (status eq 3) then begin
+    print, 'Error while executing child process. Message from child: ' + strtrim(error,2)
+    return
+  endif
+  
   ;initialize error message variable
   msg = ''
 
@@ -297,7 +302,7 @@ pro bridge_it_callback, status, error, oBridge, userdata
     taskError = oBridge.getVar('taskError')
     if (taskError ne '') then begin
       userdata['$TASK_ERROR'] = taskError
-      msg = 'Error while executing task "' + hashResults['NAME'] + '":' + taskError
+;      msg = 'Error while executing task "' + hashResults['NAME'] + '":' + taskError
     endif
     
     save_results = 1
@@ -564,7 +569,8 @@ pro bridge_it::Run, routine,$
   TIME = time,$
   PRE = pre,$
   POST = post,$
-  VARIABLES_OUT = variables_out
+  VARIABLES_OUT = variables_out,$
+  _UVALUE = uvalue
   compile_opt idl2, hidden
 
   self.RunRoutine, routine, _EXTRA = args, $
@@ -576,7 +582,8 @@ pro bridge_it::Run, routine,$
     TIME = time,$
     PRE = pre,$
     POST = post,$
-    VARIABLES_OUT = variables_out
+    VARIABLES_OUT = variables_out,$
+    _UVALUE = uvalue
 end
 
 ;+
@@ -641,7 +648,8 @@ function bridge_it::Run, routine, $
   POST = post,$
   TIME = time,$
   VARIABLES_OUT = variables_out,$
-  EXPORTRASTER = exportRaster
+  EXPORTRASTER = exportRaster,$
+  _UVALUE = uvalue
   compile_opt idl2, hidden
 
   self.RunRoutine, routine, _EXTRA = args, $
@@ -654,7 +662,8 @@ function bridge_it::Run, routine, $
     PRE = pre,$
     POST = post,$
     VARIABLES_OUT = variables_out,$
-    EXPORTRASTER = exportRaster
+    EXPORTRASTER = exportRaster,$
+    _UVALUE = uvalue
 
   return, 1
 end
@@ -791,6 +800,9 @@ end
 ;    outFile: in, required, type=string
 ;      Must be set to the fully-qualified filepath on disk for where the virtual 
 ;      raster will be written to disk.
+;    format: in, optional, type=string
+;      Specify the output file format. Supports any value of format from the 
+;      default `raster.export` method (see the docs).
 ;
 ; :Keywords:
 ;    DATA_IGNORE_VALUE: in, optional, type=number
@@ -802,7 +814,7 @@ end
 ; :Author: Zachary Norman - GitHub: znorman-harris
 ; 
 ;-
-pro bridge_it::ExportRaster, raster, outFile, DATA_IGNORE_VALUE = data_ignore_value, TIME = time
+pro bridge_it::ExportRaster, raster, outFile, format, DATA_IGNORE_VALUE = data_ignore_value, TIME = time
   compile_opt idl2
   
   ;get current session of ENVI
@@ -822,8 +834,8 @@ pro bridge_it::ExportRaster, raster, outFile, DATA_IGNORE_VALUE = data_ignore_va
     message, 'Output file not specified, required argument!'
   endif
   
-  if ~outfile.endsWith('.dat') then begin
-    message, 'outfile does not end with a .dat extension, required!'
+  if (format eq !NULL) then begin
+    format = 'ENVI'
   endif
 
   ;dehydrate our virtual raster into strings
@@ -836,17 +848,16 @@ pro bridge_it::ExportRaster, raster, outFile, DATA_IGNORE_VALUE = data_ignore_va
     !NULL = self.Run('ENVIHydrate', $
       ARG1 = strings, $
       PRE = 'arg1 = json_parse(arg1)', $
-      POST = 'output.Export, "' + outFile +'", "ENVI", ERROR = exportError, DATA_IGNORE_VALUE = ' + strtrim(data_ignore_value,2),$
+      POST = 'output.Export, "' + outFile +'", "' + format + '", ERROR = exportError, DATA_IGNORE_VALUE = ' + strtrim(data_ignore_value,2),$
       EXPORTRASTER = outFile, TIME = time)
   endif else begin
     ;run our task
     !NULL = self.Run('ENVIHydrate', $
       ARG1 = strings, $
       PRE = 'arg1 = json_parse(arg1)', $
-      POST = 'output.Export, "' + outFile +'", "ENVI", ERROR = exportError',$
+      POST = 'output.Export, "' + outFile +'", "' + format + '", ERROR = exportError',$
       EXPORTRASTER = outFile, TIME = time)
   endelse
-
 end
 
 
@@ -917,7 +928,7 @@ end
 ; :Author: Zachary Norman - GitHub: znorman-harris
 ; 
 ;-
-pro bridge_it::RunENVITask, task, TIME = time
+pro bridge_it::RunENVITask, task, TIME = time, _UVALUE = uvalue
   compile_opt idl2
   ;get current session of ENVI
   e = envi(/CURRENT)
@@ -941,7 +952,7 @@ pro bridge_it::RunENVITask, task, TIME = time
     ARG1 = strings, $
     PRE = 'arg1 = json_parse(arg1)', $
     POST = 'output.Execute, ERROR = taskError',$
-    /TASK, TIME = time)
+    /TASK, TIME = time, _UVALUE = uvalue)
   
 end
 
@@ -997,7 +1008,8 @@ pro bridge_it::RunRoutine, routine, _extra = args, $
   POST = post,$
   VARIABLES_OUT = variables_out,$
   TASK = task,$
-  EXPORTRASTER = exportRaster
+  EXPORTRASTER = exportRaster,$
+  _UVALUE = uvalue
   compile_opt idl2
 
   ;get info about the object
@@ -1219,6 +1231,11 @@ pro bridge_it::RunRoutine, routine, _extra = args, $
     runhash['$RUNS_SINCE_RESET'] = runs.since_reset[bridgenum]+1
     runhash['SELF']= self
     runbridge.SetProperty, CALLBACK = 'bridge_it_callback'
+  endif
+  
+  ;check if we have a uval
+  if (n_elements(uvalue) gt 0) then begin
+    runhash['$UVALUE'] = uvalue
   endif
 
   ;set the runhash as a property
